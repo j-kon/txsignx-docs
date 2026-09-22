@@ -73,18 +73,19 @@ Engine limits also apply. A timed-out blocking computation retains its worker pe
 Errors have a sanitized envelope:
 
 ```json
-{"error":{"code":"invalid_psbt","message":"The supplied PSBT could not be inspected."}}
+{"error":{"code":"invalid_input","message":"Invalid input or context."}}
 ```
 
 | HTTP status | Category |
 | --- | --- |
-| 400 | Invalid request or malformed JSON |
-| 404 / 405 | Unknown resource / unsupported method |
-| 413 / 415 | Body too large / unsupported content type |
-| 422 | Invalid transaction, PSBT or semantic context |
-| 500 | Internal failure |
-| 503 | Node unavailable or service busy |
-| 504 | Request timeout |
+| 400 | `invalid_json`: invalid request or malformed JSON |
+| 403 | `forbidden`: rejected Origin or Host |
+| 404 / 405 | `not_found` / `method_not_allowed` |
+| 413 / 415 | `size_limit` (request or response) / `unsupported_media_type` |
+| 422 | `invalid_input`: invalid transaction, PSBT or semantic context |
+| 500 | `internal`: internal failure |
+| 503 | `node_unavailable` or `busy` |
+| 504 | `timeout` |
 
 Consumers should handle the structured error code and avoid relying on parser wording. Rejected browser origins or Host headers can also fail before analysis. Raw RPC errors, request data, private descriptors and filesystem secrets must not appear in errors. Responses use no-store caching and browser security headers. Explicit CORS origins never imply authentication.
 
