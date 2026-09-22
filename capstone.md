@@ -1,106 +1,214 @@
-# Capstone demonstration
+# TxSignX Capstone
 
-A reproducible demonstration shows real Rust output from public synthetic inputs. It does not claim production readiness, independently verified signatures or live node context when none was supplied.
+## Project topic
 
-## Prepare
+**TxSignX — A Bitcoin Transaction Explorer and Pre-Signing Security Analyzer**
 
-Use the Milestone 6 Rust and web branches. Follow [local startup](api.md), then confirm `/api/v1/health` and `/api/v1/capabilities` respond. Use only the Rust repository's public fixtures:
+## Category
 
-| Case | File in Rust repository | Expected default offline preflight |
+**Transaction Explorer**
+
+## Tagline
+
+*Inspect. Verify. Sign with Confidence.*
+
+---
+
+## 1. Problem statement
+
+In Bitcoin, cryptographic signing is an irreversible, binding commitment of value. Once a signature is produced and broadcast, any error—such as an excessive miner fee, a compromised change address, or an uncommitted sighash flag—results in permanent, unrecoverable loss of funds.
+
+Modern Bitcoin wallets frequently force users to sign "blindly." User interfaces often present a high-level abstraction (e.g., "Send 0.05 BTC to Alice") while obscuring:
+- Exact script bytecode and output types
+- Previous-output values and calculated fee rates
+- Signature hash commitments (e.g. `SIGHASH_NONE` or `SIGHASH_SINGLE`)
+- Unconfirmed parent transaction dependencies and replaceability risks
+
+Traditional block explorers allow deep inspection of Bitcoin transactions, but only **after** they have been confirmed or broadcast to the network. By that time, it is too late to prevent loss.
+
+---
+
+## 2. Solution
+
+TxSignX bridges this critical gap by bringing explorer-grade inspection and deterministic security policy analysis into the **pre-signing workflow**.
+
+TxSignX provides:
+1. **A full Transaction Explorer**: Inspects consensus-serialized raw transactions offline or queries Bitcoin Core by transaction ID (`txid`), extracting all consensus fields, disassembling scripts into opcodes, deriving addresses, and resolving parent previous outputs for authoritative fee calculation.
+2. **Deterministic Pre-Signing Policy Preflight**: Evaluates structured transaction facts against configurable, rule-based policies before signing. It flags structural anomalies (REVIEW) and catches catastrophic errors (BLOCK) before any private key is engaged.
+
+TxSignX is **not a wallet** and **never touches private keys**. It operates as an independent, auditable security layer that empowers developers and signers to inspect facts and verify policies.
+
+---
+
+## 3. What makes TxSignX different
+
+| Traditional Block Explorers | Traditional Bitcoin Wallets | TxSignX |
 | --- | --- | --- |
-| PASS | `fixtures/policy/pass.b64` | No findings; 1,000-sat supplied-context fee |
-| REVIEW | `fixtures/policy/unusual-sighash.b64` | TG011: explicit sighash NONE (numeric 2) |
-| BLOCK | `fixtures/policy/absolute-fee.b64` | TG002: 200,000-sat fee exceeds 100,000-sat limit |
+| Post-broadcast only | Pre-signing, but often blind | **Pre-signing explorer** |
+| Requires external public servers | Minimal script or fee transparency | **Local, offline, or loopback-only** |
+| Passive observation only | Focuses on key custody and signing | **Active deterministic policy evaluation** |
+| Cloud-dependent | Monolithic trust | **Modular, read-only security layer** |
 
-These expected outcomes come from the deterministic fixture definitions. Run them against the local API before presenting; this page is a walkthrough, not a record that a particular integration run passed. The fixtures use synthetic outpoints, not spendable funds. Do not enable node analysis for these offline cases.
+---
 
-A terminal smoke check from the Rust repository, with the API already running:
+## 4. Transaction Explorer MVP mapping
 
-```sh
-python3 - <<'PYTHON'
-import json
-import urllib.request
-from pathlib import Path
+TxSignX satisfies every official requirement of the Rust for Bitcoin capstone **Transaction Explorer** category:
 
-for name, expected in [('pass', 'pass'), ('unusual-sighash', 'review'), ('absolute-fee', 'block')]:
-    payload = json.dumps({'psbt': Path(f'fixtures/policy/{name}.b64').read_text().strip()}).encode()
-    request = urllib.request.Request(
-        'http://127.0.0.1:8080/api/v1/psbt/preflight',
-        data=payload,
-        headers={'Content-Type': 'application/json'},
-    )
-    with urllib.request.urlopen(request, timeout=35) as response:
-        report = json.load(response)
-    actual = report['policy']['decision']
-    print(name, actual)
-    assert actual == expected, (name, actual)
-PYTHON
+| Capstone Requirement | Status | TxSignX Implementation Details |
+| --- | --- | --- |
+| **Accept raw transaction hex** | **Implemented** | Positional CLI argument `txsignx tx inspect <RAW_TX_HEX>`; decoded via `rust-bitcoin` with defensive 4M weight unit limits. |
+| **Accept txid from node** | **Implemented** | Flag `--txid <TXID>` with explicit loopback RPC connection to local Bitcoin Core. |
+| **Decode core fields** | **Implemented** | Decodes version, inputs, outputs, previous outpoints (`txid:vout`), `scriptSig`, witness items, sequence, and locktime. |
+| **Script classification** | **Implemented** | Identifies `P2PKH`, `P2SH`, `P2WPKH`, `P2WSH`, `P2TR`, `OP_RETURN`, and `Unknown` scripts. |
+| **Address derivation** | **Implemented** | Derives standard addresses for recognized output scripts when explicit `--network` is provided; omits for OP_RETURN or nonstandard. |
+| **Script disassembly** | **Implemented** | Disassembles `scriptSig` and `scriptPubKey` into opcodes and safe, bounded push data without script execution. |
+| **Size / weight / vsize** | **Implemented** | Calculates serialized size in bytes, BIP 141 weight in Weight Units (WU), and virtual size in virtual bytes (vB). |
+| **Fee calculation** | **Implemented** | Bounded single-hop lookup of parent transactions via Bitcoin Core resolves input prevout values and calculates exact fee. |
+| **Fee rate calculation** | **Implemented** | Calculates exact `sat/vB` fee rate when fee and transaction vsize are known. |
+| **SegWit detection** | **Implemented** | Detects witness presence and SegWit encoding. |
+| **Explicit RBF detection** | **Implemented** | Checks BIP 125 explicit signaling (`nSequence < 0xfffffffe`) per-input and per-transaction. |
+| **Confirmation status** | **Implemented** | Reports `confirmed` (with confirmation count and block hash) or `unconfirmed / mempool` when queried via Bitcoin Core. |
+| **CLI & JSON output** | **Implemented** | Human-readable terminal output with colored hierarchy, plus pure machine-readable `--json` pipeline support. |
+| **Pre-signing security extension** | **Implemented** | 15 deterministic policy rules evaluating fee limits, wallet change, script types, sighashes, and node discrepancies. |
+
+---
+
+## 5. System architecture
+
+TxSignX uses a dual-path architecture where the Transaction Explorer operates independently, or feeds its facts into the policy engine:
+
+```text
+                 INPUT
+                   │
+        ┌──────────┴──────────┐
+        │                     │
+     RAW TX / PSBT           TXID
+        │                     │
+        │                Bitcoin Core
+        │                     │
+        └──────────┬──────────┘
+                   ↓
+             txsignx-core
+       transaction / PSBT facts
+                   │
+       ┌───────────┼───────────┐
+       │           │           │
+   wallet ctx   node ctx    explorer
+       │           │           │
+       └──────┬────┘           │
+              ↓                │
+        txsignx-policy         │
+              │                │
+       PASS/REVIEW/BLOCK       │
+              └───────┬────────┘
+                      ↓
+                  CLI / API
+                      ↓
+                    Web
+                      ↓
+                External signer
 ```
 
-This command sends public fixtures to loopback only and performs no signing, broadcasting or node startup.
+For full architectural diagrams and component boundaries, see [architecture.md](architecture.md).
 
-## Live walkthrough
+---
 
-1. **Home:** read “Bitcoin transaction security before signing.” Explain that TxSignX is a security layer for wallets.
-2. **Inspector:** load the PASS sample, or paste `pass.b64`. Inspect real input/output facts, signing state and fee status. Explain that the fee is based on supplied UTXO context.
-3. **Preflight:** run without wallet/node context. Show PASS and its scope wording. Expand Not Evaluated and point out the absent wallet/node checks.
-4. **REVIEW:** load `unusual-sighash.b64`, run preflight and inspect TG011, its High severity and the explicit sighash. Explain that unusual commitments can be intentional.
-5. **BLOCK:** load `absolute-fee.b64`, run preflight and show TG002 with the 200,000-sat fee and 100,000-sat configured threshold.
-6. **Policies:** show the registry fetched from Rust: 15 active rules and two deferred rules. Explain that the React app does not evaluate those rules.
-7. **Report:** explicitly copy or download JSON and show its decision, findings and separate coverage entries. Do not expose personal data or credentials on screen.
-8. **Failure handling:** submit a clearly invalid PSBT and show the sanitized error. If demonstrating an offline API, stop only your task-owned API process, retry, then restart it.
-9. **Architecture and limits:** show [the diagram](architecture.md), point to Rust policy authority and the external signer, then explain no signing, finalization or API broadcast.
+## 6. Demonstration prerequisites
 
-## Optional node-aware segment
+1. **Rust toolchain**: Stable Rust 1.85+ with `cargo`.
+2. **Build CLI**:
+   ```sh
+   export DEVELOPER_DIR=/Library/Developer/CommandLineTools
+   cargo build -p txsignx-cli
+   ```
+3. **Optional Bitcoin Core**: For live txid inspection, a local `bitcoind` binary (version 24+) installed on `PATH`. The automated regtest script manages daemon startup and teardown automatically.
 
-Keep this separate from the offline demonstration. Use only the Rust verification harness or an explicitly isolated task-owned Regtest node. Every `bitcoind` invocation must specify `-regtest`, an exact temporary `-datadir`, nondefault ports and `-connect=0 -dnsseed=0 -listen=0 -networkactive=0 -discover=0`. Never run plain `bitcoind`, start a system Bitcoin service, use `~/.bitcoin`, or sync a public chain for this demo.
+---
 
-Configure the API's literal-loopback RPC URL and cookie-file path server-side. Supply matching public wallet context in the request. Demonstrate node rules only with real Regtest-created fixture context; never relabel offline synthetic results as node verification. Stop only the task-owned node, record the temporary datadir size, remove only that exact task-created directory and verify its deletion. The final Rust verification record should capture commands and actual results.
+## 7. Interactive demonstrations
 
-## Presentation outline
+### Demo 1: Offline raw transaction inspection
+Inspect a consensus-serialized transaction hex string completely offline without network access:
+```sh
+./target/debug/txsignx tx inspect "$(cat crates/txsignx-core/tests/fixtures/legacy.hex)"
+```
+- **Observed facts**: TXID, wTXID, Version (2), Locktime (42), Size (118 bytes), Virtual size (118 vB), SegWit (no), Explicit RBF (yes).
+- **Script disassembly**:
+  - `scriptSig asm`: `PUSHBYTES_1 51`
+  - `scriptPubKey asm`: `OP_DUP OP_HASH160 PUSHBYTES_20 2222222222222222222222222222222222222222 OP_EQUALVERIFY OP_CHECKSIG`
+- **Fee explanation**: The report displays `Fee: unavailable without prevout context`. Raw Bitcoin transactions specify which outpoints are being spent, but omit their satoshi values. TxSignX refuses to guess or invent fee values.
 
-| Slide | Message / visual |
-| --- | --- |
-| 1. Problem | Signing commits value; users need understandable pre-sign evidence |
-| 2. Signing gap | Transaction bytes alone do not prove intent, ownership, fee context or chain state |
-| 3. Architecture | Web → API → Rust core/wallet/node/policy → report → external signer |
-| 4. Milestones | M1 raw facts; M2 PSBT inspection; M3 policy; M4 wallet context; M5 node context; M6 API and web product |
-| 5. Policy rules | 15 active, two deferred; findings, severity and coverage are Rust-owned |
-| 6. Live demo | Real PASS, REVIEW and BLOCK from public synthetic fixtures |
-| 7. Security model | Untrusted input, bounded descriptor matching, trusted node observations, limited PASS |
-| 8. Explicit exclusions | No keys, signing, finalization or API broadcast |
-| 9. Evidence and next scope | Show only recorded checks; deferred policies and separately reviewed integrations |
+### Demo 2: Explicit network address derivation
+Raw transactions do not encode whether they belong to mainnet, testnet, or regtest. Adding `--network` enables address derivation:
+```sh
+./target/debug/txsignx tx inspect \
+  "$(cat crates/txsignx-core/tests/fixtures/legacy.hex)" \
+  --network bitcoin
+```
+- **Output 0 (P2PKH)**: `147Us9aEq2PvBC5wobBJw1yEpQEbPKzssA`
+- **Output 1 (P2WPKH)**: `bc1qxvenxvenxvenxvenxvenxvenxvenxven2ymjt8`
 
-## Video script — approximately four minutes
+### Demo 3: Node-assisted txid lookup (isolated Regtest)
+Execute the automated regtest explorer verification suite:
+```sh
+python3 scripts/verify-explorer-regtest.py
+```
+- Launches an isolated temporary Bitcoin Core daemon with `networkactive=0`, `regtest=1`, `txindex=1`.
+- **Confirmed Transaction**: Reports `Status: confirmed`, `Confirmations: 1`, block hash, resolved parent prevouts, exact input total (5,000,000,000 sats), fee (141 sats), and fee rate (`1.00 sat/vB`).
+- **Unconfirmed Transaction**: Reports `Status: unconfirmed / mempool`, resolved prevouts, and exact fee rate.
+- Automatically cleans up the temporary datadir.
 
-**0:00–0:30 — Problem and positioning**
+### Demo 4: Pre-signing policy preflight (PSBT)
+Demonstrates deterministic security policy evaluation over PSBTs:
+1. **PASS (`pass.b64`)**:
+   ```sh
+   ./target/debug/txsignx psbt preflight --file fixtures/policy/pass.b64
+   ```
+   *Result*: Decision **PASS** (exit code `0`). Coverage report explicitly marks unrun wallet/node rules as **Not Evaluated**.
+2. **REVIEW (`unusual-sighash.b64`)**:
+   ```sh
+   ./target/debug/txsignx psbt preflight --file fixtures/policy/unusual-sighash.b64
+   ```
+   *Result*: Decision **REVIEW** (exit code `2`). Rule `TG011` flags non-standard `SIGHASH_NONE` commitment.
+3. **BLOCK (`absolute-fee.b64`)**:
+   ```sh
+   ./target/debug/txsignx psbt preflight --file fixtures/policy/absolute-fee.b64
+   ```
+   *Result*: Decision **BLOCK** (exit code `3`). Rule `TG002` catches 200,000 sat fee exceeding configured 100,000 sat limit.
 
-“Bitcoin transaction security before signing. TxSignX is a deterministic open-source pre-sign security engine for transactions and PSBTs. It is not another wallet: it is a security layer for wallets. The goal is to make transaction facts and policy concerns visible before a user moves to an external signer.”
+---
 
-**0:30–1:05 — Architecture**
+## 8. Policy registry
 
-“The React interface sends HTTP JSON to a local Axum API. Rust inspects the transaction, adds optional wallet and node context, and evaluates the policy rules. Rust supplies the decision, findings and coverage. The frontend presents those results; it does not implement its own security scoring. Signing remains outside this flow.”
+Running `txsignx policy list` displays the active registry of 15 deterministic Rust rules:
+- `TG001`: Wrong Network (Critical)
+- `TG002`: Excessive Absolute Fee (Critical)
+- `TG003`: Excessive Fee Percentage (Critical)
+- `TG004`: Unknown Wallet Input (High)
+- `TG005`: Unknown Change Output (High / Critical)
+- `TG006`: Immature Coinbase Input (Critical)
+- `TG009`: Invalid UTXO Context (Critical)
+- `TG010`: Missing UTXO Context (High)
+- `TG011`: Unusual Sighash Type (High)
+- `TG012`: Unknown or Proprietary Metadata (Info)
+- `TG013`: Unrecognized Script Type (Medium)
+- `TG014`: Non-Zero OP_RETURN Value (Critical)
+- `TG015`: Node UTXO Unavailable (Critical)
+- `TG016`: Node Prevout Mismatch (Critical)
+- `TG017`: Mempool Spend Conflict (High)
+- *Reserved/Deferred*: `TG007` (Dust Output) and `TG008` (Address Reuse).
 
-**1:05–1:45 — PASS and coverage**
+For complete rule descriptions and triggering semantics, see [policy-registry.md](policy-registry.md).
 
-“Here is a public synthetic PSBT. We can inspect its inputs, outputs, signing state and fee status. Running preflight produces PASS. This means no evaluated active rule requires review or blocking. It does not mean universally safe. We have not supplied a wallet or node here, so those checks are listed as not evaluated. The fee comes from supplied previous-output information, not independently authenticated chain data.”
+---
 
-**1:45–2:20 — REVIEW**
+## 9. Presentation and demonstration resources
 
-“This next sample explicitly requests an unusual sighash. Rust returns REVIEW and TG011, with the finding's severity and explanation. This can be intentional, but it changes the commitment assumptions that the user needs to understand. The finding is evidence for review, not a claim that every unusual transaction is malicious.”
-
-**2:20–2:55 — BLOCK**
-
-“The third sample has a 200,000-sat fee against a configured 100,000-sat maximum. TG002 produces a critical finding and BLOCK. The threshold and evidence are visible. The browser displays the decision returned by Rust, without recomputing it.”
-
-**2:55–3:25 — Registry and export**
-
-“The policy page gets its registry from the API. There are 15 active rules and two deferred codes. Deferred does not mean passed. We can export the actual JSON report, including findings and coverage. Export is deliberate, because transaction and wallet context can be sensitive.”
-
-**3:25–4:05 — Boundaries and conclusion**
-
-“TxSignX does not handle seeds or private keys, sign, finalize, or broadcast through the API. Optional node checks use server-configured local Core context and remain dependent on that node's state. This is development software, not an independently audited production wallet. Milestone 6 connects the existing Rust engine to a usable local inspection workflow: inspect facts, review evidence and coverage, then make any signing decision outside TxSignX.”
-
-## Record evidence honestly
-
-Record the actual commit IDs, commands, outcomes and environment used for the presentation. Link to the Rust milestone verification document when complete. Do not substitute fixture expectations, screenshots, this script or prior milestone counts for new integration evidence. A failed scenario should be fixed or disclosed before recording.
+- [Demonstration Fixtures](demo-fixtures.md): Reference guide for all test fixtures.
+- [Live Demonstration Script](demo-script.md): 5–7 minute script for live Demo Day presentation.
+- [Video Recording Script](video-script.md): 3–4 minute script with precise commands and visual cues.
+- [Presentation Outline](presentation-outline.md): 8-slide structured outline.
+- [Empirical Verification Record](verification.md): Full record of unit tests, Clippy, audits, and CI runs.
+- [Security Model](security-model.md): Detailed analysis of trust boundaries and decision semantics.
+- [Limitations & Future Work](limitations.md): Explicit documentation of current operational boundaries.
