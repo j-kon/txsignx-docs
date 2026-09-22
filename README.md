@@ -1,44 +1,27 @@
-# TxSignX Documentation
+# TxSignX
 
-Architecture, security model, API and developer documentation for TxSignX.
+**Bitcoin transaction security before signing.**
 
-## Status
+Inspect. Verify. Sign with Confidence.
 
-Documentation repository setup only. Architecture, security model, and API
-specifications are pending; Milestone 1 implementation has not started.
+TxSignX is a deterministic open-source pre-sign security engine for Bitcoin transactions and PSBTs. Not another wallet. A security layer for wallets.
 
-## Local workspace
+Milestone 6 adds a local HTTP API and React interface around the Rust engine. This documentation describes that development scope; it is not an audit or a production-readiness claim. Actual test and integration evidence belongs in the Rust repository's `docs/milestone-6-verification.md`, when recorded.
 
-```text
-txsignx/                Local container; no Git repository
-├── txsignx/            Independent Git repository: Rust engine
-├── txsignx-web/        Independent Git repository: React application
-├── txsignx-docs/       Independent Git repository: documentation
-└── txsignx-brand/      Local only; no Git initialization, remote, commit, or push
-```
+## Read the documentation
 
-The three GitHub repositories are:
+- [Architecture](architecture.md): components, data flow and authority.
+- [Security model](security-model.md): trust boundaries and what PASS means.
+- [Policy registry](policy-registry.md): 15 active rules and two deferred rules.
+- [API overview](api.md): local setup, contracts and limits.
+- [User workflow](user-workflow.md): inspect, review coverage and export.
+- [Capstone demo](capstone.md): reproducible walkthrough, presentation and video script.
+- [Limitations and future work](limitations.md): explicit scope boundaries.
 
-- [j-kon/txsignx](https://github.com/j-kon/txsignx)
-- [j-kon/txsignx-web](https://github.com/j-kon/txsignx-web)
-- [j-kon/txsignx-docs](https://github.com/j-kon/txsignx-docs)
+## Repositories
 
-Each repository uses `main`. Never initialize Git in the outer workspace or in
-`txsignx-brand/`. If Git metadata already exists in the brand directory, stop and
-report it; do not delete it or alter history. Keep brand assets local.
+[Engine and API](https://github.com/j-kon/txsignx) · [React web app](https://github.com/j-kon/txsignx-web) · [Documentation](https://github.com/j-kon/txsignx-docs)
 
-## Setup verification
+The local workspace contains these three independent repositories as siblings. `txsignx-brand/` is local only: do not initialize Git there, create a remote, or commit its assets. This repository contains Markdown and needs no build tooling.
 
-From the Rust repository, run `cargo fmt --all -- --check`,
-`cargo check --workspace --locked`, `cargo test --workspace --locked`, and
-`cargo clippy --workspace --all-targets --locked -- -D warnings`.
-
-From the web repository, run `npm ci`, `npm run build`, and `npm run lint`.
-This documentation repository contains Markdown and requires no build tooling.
-
-## Repository hygiene
-
-Never commit `.env` files, RPC credentials, seed phrases, mnemonics, private keys,
-extended private keys, SQLite wallet databases, or API tokens. Inspect staged
-files before committing. Ignore rules are a convenience, not a secret scanner.
-Use normal pushes only; do not rewrite history.
+Never commit credentials, cookie files, seed phrases, private keys, private descriptors or personal wallet data. Public descriptors can also reveal wallet activity; use only the supplied synthetic fixtures for demonstrations.
