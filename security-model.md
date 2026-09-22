@@ -1,31 +1,55 @@
-# Security model
+# Security Model
 
-TxSignX helps a user review transaction intent before signing. It does not authorize signing, prove universal safety, or replace independent wallet and node verification.
+TxSignX provides deterministic pre-signing transaction inspection and policy analysis. It is designed to verify transaction intent and uncover structural discrepancies before committing cryptographic signatures.
 
-## Interpret the result with its coverage
+TxSignX does not authorize signing, guarantee universal transaction safety, or replace independent hardware wallet and full-node verification.
 
-**PASS: “No evaluated active rule requires review or blocking.”**
+## Core security principles
 
-The Rust policy engine maps critical findings to BLOCK, high or medium findings to REVIEW, and no findings or informational-only findings to PASS. PASS can therefore contain an informational finding. HTTP success is independent of the policy decision: PASS, REVIEW and BLOCK are all successful evaluations.
+1. **Deterministic Rust authority**: All transaction decoding, address derivation, fee calculations, and policy evaluations are executed exclusively in Rust (`txsignx-core`, `txsignx-node`, `txsignx-wallet`, `txsignx-policy`).
+2. **Zero AI decision-making**: TxSignX does **NOT** use machine learning, neural networks, or LLMs to score risk or determine decisions. Policy outcomes (PASS, REVIEW, BLOCK) are 100% deterministic functions over exact transaction facts and configured limits.
+3. **Passive presentation**: The web application and HTTP API are strictly presentation and transport layers. The browser never computes policy findings, recalculates risk levels, or overrides the Rust engine's decisions.
+4. **External signing boundary**: Signing decisions and private key operations remain strictly external to TxSignX.
 
-Read `rule_evaluations` alongside every decision:
+## Interpreting policy decisions and coverage
 
-- **Evaluated:** the engine ran the rule under its current semantics.
-- **Partially evaluated:** some input context was usable and some was unavailable.
-- **Not evaluated:** necessary wallet, expected-change or node context was absent or unusable; read the engine's reason.
+### Meaning of PASS, REVIEW, and BLOCK
 
-The legacy `evaluated_rules` list also includes partially evaluated rules. Use `rule_evaluations` for the three separate coverage groups. Some fact-based rules run and emit no finding when the needed fact is unavailable; “evaluated” must not be read as a guarantee that every imaginable check occurred. Deferred rules have no evaluator.
+| Decision | Exit code (CLI) | Definition |
+| --- | --- | --- |
+| **PASS** | `0` | No evaluated active rule requires review or blocking. (May include `INFO` findings). |
+| **REVIEW** | `2` | One or more evaluated rules triggered a `HIGH` or `MEDIUM` severity finding requiring user confirmation. |
+| **BLOCK** | `3` | One or more evaluated rules triggered a `CRITICAL` finding indicating serious discrepancy or dangerous parameters. |
+
+> [!IMPORTANT]
+> **PASS does not mean universally safe.**
+> PASS strictly asserts that within the scope of evaluated rules and supplied context, no threshold was breached. A transaction evaluated without wallet or node context will list those respective rules as **Not Evaluated**, not passed.
+
+### Explicit evaluation coverage groups
+
+Every policy evaluation categorizes all 15 active rules into three explicit groups:
+- **Evaluated**: The rule executed against complete, required context and produced its verdict (finding or no finding).
+- **Partially Evaluated**: Partial context was available (e.g. some inputs were resolvable while others were absent).
+- **Not Evaluated**: Essential context (wallet descriptors or Bitcoin Core connection) was omitted. The engine records an explicit reason for the omission.
+
+Deferred rules (`TG007` and `TG008`) are metadata-only definitions; they have no evaluator and are never reported as evaluated or passed.
 
 ## Trust boundaries
 
-**PSBT data is untrusted.** Internally consistent UTXO metadata is still supplied context, not independently authenticated chain data. An available fee is calculated from that context. Raw transactions alone do not provide input values or an inferable network. Signature presence and signing state do not verify cryptographic signature correctness.
+### 1. Untrusted transaction input
+All user-supplied hex, base64 PSBTs, and transaction IDs are treated as untrusted input. Consensus decoding is handled by `rust-bitcoin` with defensive resource bounds (max 8,000,000 hex characters, 4,000,000 weight units, 100,000 witness items). Memory allocation is bounded before parsing.
 
-**Wallet context is bounded.** Public descriptors identify scripts in the configured derivation window. No match within that window does not establish that an input belongs to someone else. Collaborative transactions can legitimately trigger TG004. Change intent must be declared with output indexes; TxSignX does not infer it from amount, position or appearance. Public descriptors remain privacy-sensitive.
+### 2. Node context: trusted observation, not absolute truth
+Bitcoin Core is treated as a trusted local observer, not infallible consensus ground truth. Node responses can reflect local network partitions, unconfirmed mempool states, or configuration mismatches.
+- **Fail-closed readiness**: If Bitcoin Core is in Initial Block Download (IBD) or headers/blocks are desynchronized, node-dependent checks fail closed with `NodeError::NodeNotReady`.
+- **Exact chain binding**: The explicit requested `--network` is compared directly with `getblockchaininfo`. Any discrepancy triggers a `CRITICAL` finding (`TG001`) and fails closed.
+- **Loopback isolation**: RPC communication is restricted to literal IP addresses (`127.0.0.1` or `[::1]`). Hostnames (including `localhost`) and DNS resolution are prohibited to eliminate DNS rebinding vulnerabilities.
 
-**Node context is trusted context, not consensus proof.** The local Core node can be stale, compromised or configured for another chain. Results describe its current chain and mempool views and can change. TG001 compares the explicitly configured network with the node-reported chain; it does not derive a network from the transaction. TG017 reflects that node's mempool view and can be intentional in replacement workflows. Cookie authentication and literal-loopback RPC restrict access; they do not make node answers infallible. No node means node rules are not evaluated.
+### 3. Bounded wallet context
+Wallet descriptors are strictly public (`xpub`, `tpub`, output descriptors). Private keys, seed phrases, and WIF strings are rejected on ingestion without echoing. Derivation window expansion is strictly bounded (default 1,000 addresses) to prevent denial-of-service via unbounded public key derivation.
 
-**The API is a local service.** Default binding is loopback. Request body, output, concurrency and time limits bound processing. Explicit CORS origins and Host checks reduce browser-origin attacks; CORS is not authentication against local processes. External binding requires deliberate startup configuration and a warning, and does not turn this into a production hosting service. Node URL and cookie-file configuration belong only to server startup. Errors are sanitized and input bodies, descriptors and credentials must not be logged.
+### 4. Machine-readable purity
+Machine-readable outputs (`--json`) omit all ANSI escapes, color formatting, and ASCII art banners. JSON payloads are structured, typed, and deterministic, ensuring reliable automated ingestion by scripts and CI/CD pipelines.
 
-**The browser presents Rust results.** Inputs go only to the configured API. PSBTs, transaction hex and descriptors must not enter persistent browser storage, URLs, analytics or console logs. Copying or downloading a report is an explicit user action and creates a sensitive artifact outside the app's memory. Browser extensions, the operating system and clipboard are outside TxSignX's protection.
-
-See [API controls](api.md) and [limitations](limitations.md). Development verification is not an independent security audit.
+### 5. Secret sanitization
+Credentials, authentication cookies, and private filesystem paths are never serialized into reports, echoed in errors, or logged to terminal buffers.

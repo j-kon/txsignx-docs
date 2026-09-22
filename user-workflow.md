@@ -1,22 +1,105 @@
-# Inspect and review
+# User Workflows
 
-1. Start the [local API and web app](api.md). Check which API is configured before entering data. Use public synthetic samples for a demonstration.
-2. Open **Inspector** from Home. Choose PSBT or raw transaction. Paste input, upload a supported text file, or select a sample. No private keys or seeds are accepted.
-3. Inspect the facts. For PSBTs, review transaction ID, signing state, fee status, input/output counts, explicit RBF signal, scripts, sighash metadata, metadata counts and UTXO consistency. Raw transaction facts have less context. **Unavailable** means missing information, never zero.
-4. Run PSBT preflight. Use default policy limits or explicitly configure them. Optionally add public wallet descriptors, a network, a bounded derivation window and expected-change output indexes. Request node analysis only when the local API has a configured node.
-5. Read the Rust decision and risk level. Inspect each finding's TG code, severity, location, evidence and recommendation. REVIEW and BLOCK are valid reports, not HTTP failures.
-6. Read **Evaluated**, **Partially Evaluated** and **Not Evaluated** separately. Without a node, node rules cannot verify chain or mempool facts. PASS means: “No evaluated active rule requires review or blocking.”
-7. Open **Policies** to inspect the live Rust registry, including active and deferred entries. A deferred rule is not a passed rule.
-8. Copy or download JSON only when needed. Reports may contain transaction and wallet context; manage exported files and clipboard contents accordingly. Clear the form or inspect another transaction when finished.
+TxSignX supports three primary operational workflows: offline raw transaction inspection, node-assisted transaction exploration, and pre-signing policy preflight.
 
-Signing remains in an external signer. TxSignX has no active signing or broadcast action.
+---
 
-## Recover from errors
+## 1. Offline raw transaction explorer
 
-- **API unavailable:** start the local API, check its configured URL and allowed browser origin, then retry.
-- **Invalid input:** verify that PSBT input is standard base64 PSBT v0 or that raw input is transaction hex; do not paste secrets to diagnose errors.
-- **Too large:** choose an input within the published API limits. Upload checks do not override server checks.
-- **Node unavailable:** inspect offline with clearly reduced coverage, or correct server-side node configuration. Do not paste RPC credentials into the browser.
-- **Malformed response or timeout:** retain no invented result; retry after diagnosing the local service. A stale result must not be mistaken for the new submission.
+Used to decode and inspect consensus-serialized Bitcoin transaction hex without network access.
 
-The browser holds analysis inputs in memory and sends them only to the configured API. Persistent browser storage and URL parameters are not input storage mechanisms. See [security model](security-model.md).
+```text
+Raw Transaction Hex
+        ↓
+txsignx tx inspect <RAW_TX_HEX> [--network <NET>] [--json]
+        ↓
+txsignx-core consensus decoder
+        ↓
+Factual Report: TXID, wTXID, size, vsize, weight, locktime, inputs, outputs, scripts, disassembly
+(Addresses rendered only when --network is specified; fees reported as unavailable)
+```
+
+### Steps
+1. Run `txsignx tx inspect <RAW_TX_HEX>`.
+2. Inspect structural transaction parameters: version, locktime, input count, output count.
+3. Review inputs for sequence values and explicit BIP 125 RBF signaling.
+4. Review script disassembly (`scriptSig asm` and `scriptPubKey asm`) for opcodes and push bytes.
+5. Provide `--network <network>` (e.g. `bitcoin` or `regtest`) if you wish to derive standard output addresses.
+6. Note that fees and fee rates are reported as **unavailable** because raw transactions omit previous output amounts.
+
+---
+
+## 2. Node-assisted transaction explorer (txid lookup)
+
+Used to inspect a confirmed or mempool transaction by its transaction ID (`txid`) using a local Bitcoin Core node.
+
+```text
+Transaction ID (txid)
+        ↓
+txsignx tx inspect --txid <TXID> --node-url <URL> --cookie-file <PATH> --network <NET>
+        ↓
+Bitcoin Core RPC (getblockchaininfo & getrawtransaction)
+        ↓
+Single-hop prevout resolution (getrawtransaction for parent txids)
+        ↓
+Complete Explorer Report: confirmation status, block hash, resolved prevouts, input total, fee, fee rate
+```
+
+### Steps
+1. Ensure your local Bitcoin Core node is running (for historical lookups, `txindex=1` is recommended).
+2. Execute:
+   ```sh
+   txsignx tx inspect \
+     --txid <TXID> \
+     --node-url http://127.0.0.1:8332 \
+     --cookie-file ~/.bitcoin/.cookie \
+     --network bitcoin
+   ```
+3. Inspect chain context: status (`confirmed` with confirmation count and block hash, or `unconfirmed / mempool`).
+4. Inspect resolved previous outputs: previous values and scriptPubKeys.
+5. Review authoritative fee calculation and virtual size fee rate (`sat/vB`).
+
+---
+
+## 3. Pre-signing security preflight (PSBT)
+
+Used to verify transaction intent, evaluate fee thresholds, match wallet keychains, and uncover discrepancies before signing.
+
+```text
+Unsigned / Partially Signed PSBT v0
+        ↓
+txsignx psbt preflight --file <PSBT_FILE> [--wallet-config <CONFIG>] [--node-url ...]
+        ↓
+txsignx-core (extract facts) + txsignx-wallet (descriptor matching) + txsignx-node (UTXO state)
+        ↓
+txsignx-policy evaluation (15 active rules)
+        ↓
+Decision: PASS (0), REVIEW (2), or BLOCK (3) with explicit findings and coverage
+        ↓
+User reviews evidence → Passes to external signer if approved
+```
+
+### Steps
+1. Export unsigned or partially signed PSBT from your wallet coordinator (e.g. Sparrow, Electrum, Core).
+2. Run preflight in CLI or paste into the web interface:
+   ```sh
+   txsignx psbt preflight --file payment.psbt
+   ```
+3. Review the policy decision:
+   - **PASS**: No evaluated active rule triggered. Confirm that required contexts (wallet/node) were evaluated or deliberately omitted.
+   - **REVIEW**: Review specific `HIGH` or `MEDIUM` findings (e.g. `TG011` unusual sighash, `TG010` missing prevouts).
+   - **BLOCK**: Discrepancy detected (e.g. `TG002` excessive fee, `TG014` non-zero OP_RETURN, `TG016` node prevout mismatch). Abort signing.
+4. If the decision is acceptable, hand off the PSBT to your external signer (hardware wallet, cold storage, or air-gapped signer).
+
+---
+
+## Error handling and recovery
+
+| Scenario | Cause | Resolution |
+| --- | --- | --- |
+| `invalid txid format` | Supplied `--txid` is not 64 hex characters | Verify transaction hash string. |
+| `TransactionNotFound` | Txid is absent from mempool and node has no `txindex=1` | Ensure txid exists or run node with `txindex=1`. |
+| `UnsupportedNetwork` | Node chain does not match explicit `--network` | Check whether node is on mainnet, testnet, or regtest. |
+| `NodeNotReady` | Node is in Initial Block Download (IBD) or headers desynced | Wait for Bitcoin Core to finish synchronizing. |
+| `OutputExceedsInput` | Resolved input values are less than output values | Invalid transaction context; fee cannot be negative. |
+| `InvalidEndpoint` | Node URL is not literal `127.0.0.1` or `[::1]` | Use literal loopback IP; hostnames like `localhost` are rejected. |

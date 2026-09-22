@@ -1,6 +1,6 @@
 # Local API overview
 
-The versioned HTTP interface orchestrates the Rust crates. The implementation contract is recorded in the Rust repository at `docs/milestone-6-plan.md`; final verification evidence is separate. These instructions target the Milestone 6 branches until merged.
+The versioned HTTP interface orchestrates the Rust crates. The implementation contract is recorded in the Rust repository; final empirical verification evidence is documented in [verification.md](verification.md).
 
 ## Start locally
 
