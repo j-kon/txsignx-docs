@@ -8,7 +8,7 @@ This document records the empirical verification evidence for the final merged T
 
 ### Rust / CLI / API (`j-kon/txsignx`)
 - **Base branch**: `main`
-- **Current main SHA**: `a83e450304785e5a28b1e3652b097b47f3850eeb`
+- **Current main SHA**: `9c1172e539de2586b03648ed2bb5838450acd7a1`
 - **Key Merged Pull Requests**:
   - [PR #9 — feat: add Transaction Explorer capstone compatibility](https://github.com/j-kon/txsignx/pull/9) (`4773aa3c62467e08f610b9623fdb51cb253330c5`): Core & CLI Transaction Explorer
   - [PR #10 — feat(api): expose Transaction Explorer over HTTP](https://github.com/j-kon/txsignx/pull/10) (`a83e450304785e5a28b1e3652b097b47f3850eeb`): HTTP Transaction Explorer
@@ -28,18 +28,18 @@ This document records the empirical verification evidence for the final merged T
 
 ## 2. Rust verification
 
-All checks executed against `main` (`a83e450304785e5a28b1e3652b097b47f3850eeb`):
+All checks executed against `main` (`9c1172e539de2586b03648ed2bb5838450acd7a1`):
 
 ### Workspace test suite
 ```text
 cargo test --workspace
 ```
 - **Result**: **PASS**
-- **Test count**: **345 tests passed**, 0 failed, 0 ignored across 6 workspace crates:
-  - `txsignx-core`: 81 tests
-  - `txsignx-node`: 33 tests
-  - `txsignx-cli`: 119 tests (including dedicated CLI transaction explorer tests)
-  - `txsignx-policy`: 64 tests
+- **Test count**: **345 tests passed**, 0 failed, 0 ignored across 6 workspace crates (sum check: 91 + 29 + 82 + 79 + 24 + 40 = 345):
+  - `txsignx-core`: 91 tests
+  - `txsignx-node`: 29 tests
+  - `txsignx-cli`: 82 tests (including dedicated CLI transaction explorer tests)
+  - `txsignx-policy`: 79 tests
   - `txsignx-wallet`: 24 tests
   - `txsignx-api`: 40 tests (including 24 dedicated HTTP transaction explorer tests)
 
