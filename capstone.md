@@ -30,10 +30,10 @@ Traditional block explorers allow deep inspection of Bitcoin transactions, but o
 
 ## 2. Solution
 
-TxSignX bridges this critical gap by bringing explorer-grade inspection and deterministic security policy analysis into the **pre-signing workflow**.
+TxSignX bridges this critical gap by bringing explorer-grade inspection and deterministic security policy analysis into the **pre-signing workflow**, delivered across CLI, local HTTP API, and modern Web interfaces.
 
 TxSignX provides:
-1. **A full Transaction Explorer**: Inspects consensus-serialized raw transactions offline or queries Bitcoin Core by transaction ID (`txid`), extracting all consensus fields, disassembling scripts into opcodes, deriving addresses, and resolving parent previous outputs for authoritative fee calculation.
+1. **A full Transaction Explorer**: Inspects consensus-serialized raw transactions offline or queries Bitcoin Core by transaction ID (`txid`) across CLI, HTTP API, and Web (`txsignx-web`), extracting all consensus fields, disassembling scripts into opcodes, deriving addresses, and resolving parent previous outputs for authoritative fee calculation.
 2. **Deterministic Pre-Signing Policy Preflight**: Evaluates structured transaction facts against configurable, rule-based policies before signing. It flags structural anomalies (REVIEW) and catches catastrophic errors (BLOCK) before any private key is engaged.
 
 TxSignX is **not a wallet** and **never touches private keys**. It operates as an independent, auditable security layer that empowers developers and signers to inspect facts and verify policies.
@@ -57,11 +57,11 @@ TxSignX satisfies every official requirement of the Rust for Bitcoin capstone **
 
 | Capstone Requirement | Status | TxSignX Implementation Details |
 | --- | --- | --- |
-| **Accept raw transaction hex** | **Implemented** | Positional CLI argument `txsignx tx inspect <RAW_TX_HEX>`; decoded via `rust-bitcoin` with defensive 4M weight unit limits. |
-| **Accept txid from node** | **Implemented** | Flag `--txid <TXID>` with explicit loopback RPC connection to local Bitcoin Core. |
+| **Accept raw transaction hex** | **Implemented** | Available across CLI (`txsignx tx inspect`), HTTP API (`POST /api/v1/transactions/inspect`), and Web (`txsignx-web` Raw tab); decoded via `rust-bitcoin` with defensive 4M weight unit limits. |
+| **Accept txid from node** | **Implemented** | Available across CLI (`--txid`), HTTP API (`{"txid":"..."}`), and Web (`Transaction ID` tab) via loopback RPC connection to local Bitcoin Core. |
 | **Decode core fields** | **Implemented** | Decodes version, inputs, outputs, previous outpoints (`txid:vout`), `scriptSig`, witness items, sequence, and locktime. |
 | **Script classification** | **Implemented** | Identifies `P2PKH`, `P2SH`, `P2WPKH`, `P2WSH`, `P2TR`, `OP_RETURN`, and `Unknown` scripts. |
-| **Address derivation** | **Implemented** | Derives standard addresses for recognized output scripts when explicit `--network` is provided; omits for OP_RETURN or nonstandard. |
+| **Address derivation** | **Implemented** | Derives standard addresses for recognized output scripts when explicit `--network` or web selector is provided; omits for OP_RETURN or nonstandard. |
 | **Script disassembly** | **Implemented** | Disassembles `scriptSig` and `scriptPubKey` into opcodes and safe, bounded push data without script execution. |
 | **Size / weight / vsize** | **Implemented** | Calculates serialized size in bytes, BIP 141 weight in Weight Units (WU), and virtual size in virtual bytes (vB). |
 | **Fee calculation** | **Implemented** | Bounded single-hop lookup of parent transactions via Bitcoin Core resolves input prevout values and calculates exact fee. |
@@ -69,7 +69,7 @@ TxSignX satisfies every official requirement of the Rust for Bitcoin capstone **
 | **SegWit detection** | **Implemented** | Detects witness presence and SegWit encoding. |
 | **Explicit RBF detection** | **Implemented** | Checks BIP 125 explicit signaling (`nSequence < 0xfffffffe`) per-input and per-transaction. |
 | **Confirmation status** | **Implemented** | Reports `confirmed` (with confirmation count and block hash) or `unconfirmed / mempool` when queried via Bitcoin Core. |
-| **CLI & JSON output** | **Implemented** | Human-readable terminal output with colored hierarchy, plus pure machine-readable `--json` pipeline support. |
+| **Multi-interface output** | **Implemented** | Human-readable terminal output, pure machine-readable `--json` pipeline support, local REST API, and polished Web interface. |
 | **Pre-signing security extension** | **Implemented** | 15 deterministic policy rules evaluating fee limits, wallet change, script types, sighashes, and node discrepancies. |
 
 ---

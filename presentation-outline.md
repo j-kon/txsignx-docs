@@ -12,8 +12,8 @@ Presentation context: Capstone project presentation and Demo Day.
   - Open-source Rust tool for consensus transaction inspection and security preflight
   - Capstone Category: **Transaction Explorer**
   - Core Tagline: *Inspect. Verify. Sign with Confidence.*
-  - Developer & security-first architecture
-- **Suggested visual**: TxSignX terminal ASCII banner alongside high-contrast code snippet of clean transaction inspection.
+  - Available across Web application, HTTP API, and Command-Line Interface
+- **Suggested visual**: TxSignX Web application interface alongside terminal ASCII banner and code snippet.
 - **Speaker note**: *"Today I am presenting TxSignX. Our goal is to give Bitcoin users and developers complete visibility and deterministic security checks before they ever commit a cryptographic signature."*
 
 ---
@@ -40,7 +40,7 @@ Presentation context: Capstone project presentation and Demo Day.
   - Address derivation: standard P2PKH, P2SH, P2WPKH, P2WSH, P2TR (explicit network)
   - Virtual size, weight, and fee rate (`sat/vB`) calculations
   - Confirmation status and single-hop parent transaction prevout resolution
-- **Suggested visual**: Feature matrix showing all Capstone MVP requirements checked green with Rust symbol.
+- **Suggested visual**: Feature matrix showing all Capstone MVP requirements checked green across Web, HTTP API, and CLI.
 - **Speaker note**: *"TxSignX satisfies every core requirement of the Transaction Explorer capstone: from consensus decoding and opcode disassembly to address derivation, confirmation tracking, and prevout fee calculation."*
 
 ---
@@ -51,7 +51,8 @@ Presentation context: Capstone project presentation and Demo Day.
 - **Bullets**:
   - `txsignx-core`: Decodes transactions and PSBTs via `rust-bitcoin`
   - Dual paths: Independent Transaction Explorer vs. Policy Preflight
-  - Contextual providers: `txsignx-node` (loopback RPC) and `txsignx-wallet` (public descriptors)
+  - Multi-interface delivery: Web application (React/Vite), HTTP API (Axum), and CLI
+  - Server-side isolation: Bitcoin Core RPC credentials stay on the server; never enter the browser
   - `txsignx-policy`: 15 active deterministic rules; zero AI heuristics
   - External signer: Keys and signing remain strictly outside TxSignX
 - **Suggested visual**: Architectural flow diagram from `architecture.md` highlighting the separation between core facts, policy, and signing.
@@ -67,8 +68,8 @@ Presentation context: Capstone project presentation and Demo Day.
   - Explicit network: Addresses derived only when network is declared; no guessing
   - Txid mode: Queries local Bitcoin Core over loopback RPC (`127.0.0.1` / `[::1]`)
   - Prevout resolution: Single-hop parent lookup resolves input values and fee rates
-  - Confirmation status: Explicit `confirmed` with count and block hash, or `mempool`
-- **Suggested visual**: Screenshot of terminal output showing `tx inspect` side-by-side with resolved fee and address display.
+  - Confirmation status: Explicit `confirmed` with count and block hash, or `unconfirmed / mempool`
+- **Suggested visual**: Screenshot of Web Inspector in Raw mode side-by-side with Node-assisted TXID mode showing resolved fees.
 - **Speaker note**: *"In our live demo, we show that offline raw inspection never fabricates fees. In txid mode, TxSignX safely queries Bitcoin Core, resolves parent inputs, and calculates exact sat/vB fee rates."*
 
 ---
@@ -81,7 +82,7 @@ Presentation context: Capstone project presentation and Demo Day.
   - **REVIEW (2)**: Flags structural risks (e.g. `TG011` unusual sighash like SIGHASH_NONE)
   - **BLOCK (3)**: Catastrophic errors blocked (e.g. `TG002` excessive fee over threshold, `TG014` non-zero OP_RETURN)
   - 15 active rules; 2 deferred rules (`TG007` dust, `TG008` address reuse)
-- **Suggested visual**: Tri-color badge diagram (Green PASS / Amber REVIEW / Red BLOCK) showing real fixture examples and exit codes.
+- **Suggested visual**: Tri-color badge diagram (Green PASS / Amber REVIEW / Red BLOCK) showing real fixture examples and web UI cards.
 - **Speaker note**: *"Our policy engine uses a clear three-tier decision model. A minor risk triggers REVIEW; a fat-finger fee triggers BLOCK. And PASS never lies about checks that weren't run."*
 
 ---
@@ -93,10 +94,11 @@ Presentation context: Capstone project presentation and Demo Day.
   - Strict loopback RPC only (`127.0.0.1` and `[::1]`); DNS hostnames prohibited
   - 5-second timeout, 8 KB header cap, 1 MiB response body limit
   - Zero private keys, seed handling, or mainnet broadcast
-  - 321 workspace tests passing; 0 Clippy warnings; 0 RustSec vulnerabilities
+  - **345 Rust workspace tests** passing across 6 crates; 0 Clippy warnings; 0 RustSec vulnerabilities
+  - **48 Web tests** passing; 0 npm vulnerabilities; clean linter and build
   - Automated isolated Regtest integration suite with clean teardown
-- **Suggested visual**: Test summary dashboard showing `cargo test` 321 passed, `cargo audit` 0 advisories, and regtest script PASS.
-- **Speaker note**: *"Security isn't an afterthought. We enforce literal loopback addressing, bounded buffers, zero secret leakage, and validate everything through 321 automated unit tests and isolated Regtest integration."*
+- **Suggested visual**: Test summary dashboard showing `cargo test` 345 passed, `vitest` 48 passed, and audit/linter clean results.
+- **Speaker note**: *"Security isn't an afterthought. We enforce literal loopback addressing, bounded buffers, zero secret leakage, and validate everything through 345 automated Rust tests and 48 web tests."*
 
 ---
 
@@ -104,9 +106,10 @@ Presentation context: Capstone project presentation and Demo Day.
 
 - **Main message**: TxSignX delivers an auditable pre-signing explorer and policy engine for the Bitcoin ecosystem.
 - **Bullets**:
-  - Delivered: Complete Capstone Transaction Explorer MVP + Pre-signing policy layer
+  - Delivered: Complete Capstone Transaction Explorer MVP across Web, API, and CLI
+  - Pre-signing policy layer: 15 active deterministic security rules
   - Next steps: PSBT v2 ([BIP 370](https://bips.dev/370/)) support and hardware wallet companion workflows
   - Open source: Rust engine, React web interface, and full documentation available on GitHub
   - Tagline: *Inspect. Verify. Sign with Confidence.*
-- **Suggested visual**: Final slide with GitHub repository links, QR codes, and key project metadata.
+- **Suggested visual**: Final slide with GitHub repository links and key project metadata.
 - **Speaker note**: *"TxSignX bridges the gap between raw consensus data and user security. By making transactions transparent before signing, we can eliminate costly mistakes. Thank you!"*
