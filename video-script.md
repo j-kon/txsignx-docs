@@ -1,133 +1,93 @@
 # Video Demonstration Script
 
-Target length: **3–4 minutes**  
-Recording format: Terminal capture (1080p, 60fps), clean prompt, large monospace font, high contrast.  
+Target length: **3–4 minutes**
+Recording format: Web interface capture (1080p, 60fps) with terminal split/cutaways, clean browser window, large font, high contrast.
 Audio: Clear voiceover narration.
 
 ---
 
-## Scene 1: Introduction and CLI startup [0:00 – 0:30]
+## Scene 1: Introduction and overview [0:00 – 0:35]
 
-**Visual**: Terminal at repo root (`~/Developer/jaykon/txsignx/txsignx`).  
-**Command**:
-```sh
-txsignx
-```
-**Expected on-screen output**:
-```text
-████████╗██╗  ██╗███████╗██╗ ██████╗ ███╗   ██╗██╗  ██╗
-╚══██╔══╝╚██╗██╔╝██╔════╝██║██╔════╝ ████╗  ██║╚██╗██╔╝
-   ██║    ╚███╔╝ ███████╗██║██║  ███╗██╔██╗ ██║ ╚███╔╝
-   ██║    ██╔██╗ ╚════██║██║██║   ██║██║╚██╗██║ ██╔██╗
-   ██║   ██╔╝ ██╗███████║██║╚██████╔╝██║ ╚████║██╔╝ ██╗
-   ╚═╝   ╚═╝  ╚═╝╚══════╝╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═╝
+**Visual**: Clean browser showing TxSignX Web application (`http://127.0.0.1:5173`) with tagline: *Inspect. Verify. Sign with Confidence.*
+**Cutaway / Split**: Quick terminal view showing `txsignx` CLI banner.
 
-Bitcoin transaction security before signing.
-Inspect. Verify. Sign with Confidence.
-
-v0.1.0
-...
-```
 **Narrator**:
-> *"Welcome to TxSignX — a Bitcoin Transaction Explorer and Pre-Signing Security Analyzer built in Rust. In this demo, we'll tour our consensus transaction explorer, node integration, and deterministic pre-signing policy engine."*
+> *"Welcome to TxSignX — a Bitcoin Transaction Explorer and Pre-Signing Security Analyzer built in Rust. In Bitcoin, signing is an irreversible commitment. Wallets often force users to sign blindly, hiding critical script details and fee shares.*
+> *TxSignX brings deep transaction exploration into the pre-signing stage across the web and terminal. In this demo, we'll tour our raw transaction explorer, node integration, and deterministic pre-signing policy engine."*
 
 ---
 
-## Scene 2: Raw transaction explorer & address derivation [0:30 – 1:15]
+## Scene 2: Raw transaction explorer & address derivation [0:35 – 1:25]
 
-**Visual**: Clean terminal screen.  
-**Command 1**:
-```sh
-txsignx tx inspect "$(cat crates/txsignx-core/tests/fixtures/legacy.hex)"
-```
-**Expected on-screen output**:
-- Header: Version 2, Locktime 42, Size: 118 bytes, Virtual size: 118 vB.
-- SegWit: no, Explicit RBF: yes.
-- Opcode disassembly: `scriptSig asm: PUSHBYTES_1 51`, `scriptPubKey asm: OP_DUP OP_HASH160 ...`.
-- Fee: `unavailable without prevout context`.
+**Visual**: TxSignX Web Inspector on the **Raw Transaction** tab.
+**Action 1**: Paste raw consensus hex from `legacy.hex` with network set to **No network**, click **Inspect Transaction**.
+**Expected on-screen UI**:
+- Headers: Version 2, Locktime 42, Size 118 bytes, Virtual size 118 vB.
+- Explicit RBF signaling: Detected (`nSequence: 0xfffffffd`).
+- Opcode disassembly: `scriptSig` and `scriptPubKey` disassembled into readable opcodes.
+- Fee card: Explicitly displays **unavailable without prevout context**.
 
 **Narrator**:
-> *"First, offline transaction exploration. TxSignX decodes consensus serialization, calculates exact virtual sizes, identifies explicit BIP 125 RBF signaling, and disassembles bytecode into opcodes.*
-> *Because raw transactions omit previous output values, TxSignX refuses to invent fees—it explicitly reports fee unavailable."*
+> *"First, raw transaction inspection completely offline. TxSignX decodes consensus serialization, computes exact virtual sizes, identifies explicit BIP 125 RBF signaling, and disassembles bytecode into opcodes.*
+> *Notice the fee: raw Bitcoin transactions omit previous output values, so TxSignX refuses to invent or guess fees—it reports fee unavailable."*
 
-**Command 2**:
-```sh
-txsignx tx inspect "$(cat crates/txsignx-core/tests/fixtures/legacy.hex)" --network bitcoin
-```
-**Expected on-screen output**:
-- Output 0 Address: `147Us9aEq2PvBC5wobBJw1yEpQEbPKzssA` (P2PKH)
-- Output 1 Address: `bc1qxvenxvenxvenxvenxvenxvenxvenxven2ymjt8` (P2WPKH)
+**Action 2**: Switch network dropdown to **Bitcoin (Mainnet)** and re-inspect.
+**Expected on-screen UI**:
+- Standard addresses rendered: Legacy P2PKH (`147Us9a...`) and SegWit P2WPKH (`bc1qxve...`).
 
 **Narrator**:
-> *"When an explicit network is supplied, TxSignX derives standard Bitcoin addresses. Network is never guessed."*
+> *"When an explicit network is selected, standard addresses are derived. Because consensus transactions carry no network identifier, network is never assumed silently."*
 
 ---
 
-## Scene 3: Txid inspection & prevout fee resolution [1:15 – 2:00]
+## Scene 3: Txid inspection & node-assisted prevout resolution [1:25 – 2:15]
 
-**Visual**: Terminal executing automated regtest verification.  
-**Command**:
-```sh
-python3 scripts/verify-explorer-regtest.py
-```
-**Expected on-screen output**:
-```text
-Starting isolated Regtest daemon in /tmp/txsignx-explorer-regtest-...
-Isolated Regtest daemon running with networkactive=0.
-Inspecting Confirmed Transaction A: ...
-  Confirmed Transaction A verification: PASS
-Inspecting Unconfirmed Transaction B: ...
-  Unconfirmed Transaction B verification: PASS
-Testing human-readable terminal output...
-  Human-readable terminal output: PASS
+**Visual**: Switch to **Transaction ID** tab in Web Inspector.
+**Action**: Paste confirmed transaction ID from Regtest demo (or display node-assisted lookup).
+**Expected on-screen UI**:
+- Confirmation status: `confirmed` with block hash and confirmation count.
+- Resolved previous outputs: Parent transaction amounts and locking scripts.
+- Authoritative fees: Exact fee (141 satoshis) and virtual size fee rate (1.00 sat/vB).
+- Security highlight callout: Node credentials remain isolated on the server; the browser never prompts for or stores RPC credentials.
 
-=== ALL CAPSTONE REGTEST EXPLORER CHECKS PASSED ===
-```
 **Narrator**:
-> *"Next, node-assisted exploration. TxSignX connects to a local Bitcoin Core daemon over loopback RPC.*
-> *Here, running against an isolated Regtest instance, TxSignX fetches transactions by txid, reports confirmation status and block hash, and resolves parent outputs.*
-> *With inputs resolved, it calculates the exact transaction fee—141 satoshis—and the precise fee rate of 1.00 sat/vB."*
-
-**Fallback**: If running in an environment without `bitcoind`, display the recorded output from `crates/txsignx-cli/tests/regtest_explorer.rs` or explain that txid mode requires Bitcoin Core.
+> *"Next, node-assisted exploration. In txid mode, the browser sends only the 64-character hash to our HTTP API. Bitcoin Core credentials remain strictly isolated on the server.*
+> *TxSignX connects to the node over loopback RPC, fetches confirmation status, and performs a single-hop lookup of parent transactions.*
+> *With inputs resolved, it calculates the exact fee—141 satoshis—and the precise fee rate of 1.00 sat/vB. If the transaction were in the mempool, it accurately reports unconfirmed mempool status."*
 
 ---
 
-## Scene 4: Deterministic pre-signing policy preflight [2:00 – 2:50]
+## Scene 4: Pre-signing security preflight (PASS, REVIEW, BLOCK) [2:15 – 3:15]
 
-**Visual**: Preflight command executions.  
-**Command 1 (PASS)**:
-```sh
-txsignx psbt preflight --file fixtures/policy/pass.b64
-```
-**Narrator**:
-> *"Now for pre-signing security. For a standard payment, preflight returns PASS. Notice the coverage: fact rules pass, while unconfigured wallet and node rules are explicitly marked 'Not Evaluated'."*
+**Visual**: Switch to **PSBT** tab in Web Inspector.
+**Action 1**: Paste `pass.b64` and click **Analyze PSBT**.
+**Expected on-screen UI**: Green **PASS** verdict banner with transparent coverage metrics.
 
-**Command 2 (REVIEW)**:
-```sh
-txsignx psbt preflight --file fixtures/policy/unusual-sighash.b64
-```
 **Narrator**:
-> *"When a transaction contains an unusual signature hash like SIGHASH_NONE, rule TG011 triggers REVIEW with exit code 2, warning the user before signing."*
+> *"Now for pre-signing security using BIP 174 PSBT v0. For a clean payment, preflight returns PASS. In TxSignX, PASS means no active evaluated rule requires review or blocking; unconfigured wallet and node checks are transparently marked 'Not Evaluated'."*
 
-**Command 3 (BLOCK)**:
-```sh
-txsignx psbt preflight --file fixtures/policy/absolute-fee.b64
-```
+**Action 2**: Paste `unusual-sighash.b64` and click **Analyze PSBT**.
+**Expected on-screen UI**: Amber **REVIEW** banner with rule `TG011` flagged (`SIGHASH_NONE`).
+
 **Narrator**:
-> *"When a transaction fee exceeds configured development limits—here 200,000 satoshis against a 100,000-sat limit—rule TG002 triggers BLOCK with exit code 3, preventing accidental fee overpayments."*
+> *"When a transaction contains an unusual sighash like SIGHASH_NONE, rule TG011 triggers REVIEW, warning the user that outputs are uncommitted before they sign."*
+
+**Action 3**: Paste `absolute-fee.b64` and click **Analyze PSBT**.
+**Expected on-screen UI**: Red **BLOCK** banner with rule `TG002` flagged (excessive fee over threshold).
+
+**Narrator**:
+> *"When a transaction fee breaches configured limits—here 200,000 satoshis—rule TG002 triggers BLOCK, preventing catastrophic fee overpayments before any signature is applied.*
+> *Notice that Explorer facts and Preflight verdicts remain strictly separate: the explorer never invents policies, and preflight never replaces consensus facts."*
 
 ---
 
-## Scene 5: Policy registry & conclusion [2:50 – 3:30]
+## Scene 5: Verification, security boundaries & conclusion [3:15 – 3:45]
 
-**Visual**: Terminal displaying policy registry.  
-**Command**:
-```sh
-txsignx policy list
-```
-**Expected on-screen output**:
-Structured list of rules `TG001` through `TG017` with color-coded severity tags and descriptions.
+**Visual**: Split screen: terminal showing verified test suites alongside GitHub repository links.
+- Rust workspace: 345 passed tests across 6 crates.
+- Web: 48 passed tests, zero lint warnings, zero audit vulnerabilities.
 
 **Narrator**:
-> *"All 15 policy rules are evaluated deterministically in Rust. TxSignX holds no private keys and never signs. It empowers users to inspect consensus facts and verify security policies before signing.*
+> *"TxSignX holds zero private keys, performs no signing, and uses 100% deterministic Rust rules with zero AI guesswork.*
+> *Verified across 345 Rust tests and 48 web tests, TxSignX delivers an auditable explorer and security analyzer for the Bitcoin ecosystem.*
 > *TxSignX: Inspect. Verify. Sign with Confidence. Thank you!"*

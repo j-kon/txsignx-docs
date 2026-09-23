@@ -22,7 +22,7 @@ A traditional transaction explorer explains what a transaction contains on-chain
 - **[Live Demo Script](demo-script.md)**: Timed 5–7 minute script for live Demo Day presentation.
 - **[Video Recording Script](video-script.md)**: 3–4 minute terminal recording script with exact visual cues and narration.
 - **[Presentation Slide Outline](presentation-outline.md)**: 8-slide structured outline for presentation decks.
-- **[Empirical Verification Record](verification.md)**: Test evidence from 321 workspace tests, Clippy, audits, and isolated Regtest integration runs.
+- **[Empirical Verification Record](verification.md)**: Complete test evidence from 345 Rust workspace tests, 48 web tests, Clippy, audits, and isolated Regtest integration runs.
 
 ### Technical & Architectural Specifications
 - **[Architecture](architecture.md)**: Dual-path system architecture (Transaction Explorer vs. Preflight), Mermaid data flow, and component responsibilities.
